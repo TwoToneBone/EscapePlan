@@ -2,32 +2,36 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace EscapePlan
 {
     class Program
     {
-        public static List<Scenario> _scenarios = new List<Scenario>();
+        public List<Scenario> _scenarios { get; set; }
+        public Program()
+        {
+            _scenarios = new List<Scenario>();
+        }
 
         static void Main(string[] args)
         {
+            Program program = new Program();
+
             // Collects input.
-            CollectInputs();
+            program.CollectInputs();
 
             // Calculates which robots are within reach of a hole in every scenario.
-            UnleashStorm();
+            program.UnleashStorm();
 
             // Figure out which robot is closest to every hole.
-            PopulateHoles();
+            program.PopulateHoles();
 
             // Finally do the output to console.
-            Output();
+            program.Output();
 
         }
 
-        private static void Output()
+        void Output()
         {
             Console.Clear();
 
@@ -46,7 +50,7 @@ namespace EscapePlan
             }
         }
 
-        private static void PopulateHoles()
+        void PopulateHoles()
         {
             foreach (var scenario in _scenarios)
             {
@@ -55,13 +59,16 @@ namespace EscapePlan
                 {
                     foreach (var hole in duration.Holes)
                     {
-                        int RobotId = hole.RobotsInRange.OrderBy(a=> a.Value).FirstOrDefault().Key;
+                        int RobotId = hole.Candidates.OrderBy(a => a.Value).FirstOrDefault().Key;
 
-                        IEnumerable<Robot> robot = _scenarios.Find(a => a.Id == scenario.Id)
+                        Robot robot = _scenarios
+                            .Find(a => a.Id == scenario.Id)
                             .Durations.Where(b => b.Time == duration.Time)
                             .Select(b => b.Robots
-                            .Find(c => c.Id == RobotId));
-                        
+                            .Find(c => c.Id == RobotId))
+                            .SingleOrDefault();
+
+                        robot.isHiding = true;
 
                     }
                 }
@@ -69,7 +76,7 @@ namespace EscapePlan
 
         }
 
-        private static void UnleashStorm()
+        void UnleashStorm()
         {
             foreach (var scenario in _scenarios)
             {
@@ -79,7 +86,7 @@ namespace EscapePlan
 
                     foreach (var hole in duration.Holes)
                     {
-                        hole.RobotsInRange = new Dictionary<int, double>();
+                        Dictionary<int,double> robotsInRange = new Dictionary<int, double>();
 
                         foreach (var robot in duration.Robots)
                         {
@@ -90,7 +97,7 @@ namespace EscapePlan
 
                             if (distanceToHole <= movementCapacity)
                             {
-                                hole.RobotsInRange.Add(robot.Id, distanceToHole);
+                                robotsInRange.Add(robot.Id, distanceToHole);
                             }
 
                             distanceToX = 0;
@@ -98,68 +105,75 @@ namespace EscapePlan
                             distanceToHole = 0;
                         }
 
-                        
+                        hole.Candidates = new Dictionary<int, double>(robotsInRange);
                     }
                     movementCapacity = 0;
                 }
             }
         }
 
-        private static void CollectInputs()
+        void CollectInputs()
         {
             for (int i = 0; i < 10; i++)
             {
-                int newRobots = int.Parse(Console.ReadLine());
+                Scenario scenario = new Scenario(i + 1);
+                scenario.Durations = new List<Duration>();
 
+                List<Robot> robots = new List<Robot>();
+                List<Hole> holes = new List<Hole>();
+
+                int newRobots = int.Parse(Console.ReadLine());
                 if (newRobots == 0)
                 {
                     break;
                 }
 
-                List<Robot> robots = new List<Robot>();
-                List<Hole> holes = new List<Hole>();
-
-                for (int ii = 0; ii < newRobots; ii++)
+                for (int iii = 0; iii < newRobots; iii++)
                 {
-                    string[] inputCoords = Console.ReadLine().Split(' ');
-
-                    Robot robot = new Robot(double.Parse(inputCoords[0], CultureInfo.InvariantCulture), double.Parse(inputCoords[1], CultureInfo.InvariantCulture), ii + 1);
+                    string[] inputCoordsRobot = Console.ReadLine().Split(' ');
+                    Robot robot = new Robot(double.Parse(inputCoordsRobot[0], CultureInfo.InvariantCulture), double.Parse(inputCoordsRobot[1], CultureInfo.InvariantCulture), iii + 1);
                     robots.Add(robot);
                 }
 
                 int newHoles = int.Parse(Console.ReadLine());
-
-                for (int ii = 0; ii < newHoles; ii++)
+                for (int iii = 0; iii < newHoles; iii++)
                 {
-                    string[] inputCoords = Console.ReadLine().Split(' ');
-                    Hole hole = new Hole(double.Parse(inputCoords[0], CultureInfo.InvariantCulture), double.Parse(inputCoords[1], CultureInfo.InvariantCulture), ii + 1);
-                    holes.Add(hole);
+                    string[] inputCoordsHole = Console.ReadLine().Split(' ');
+                    Hole hole = new Hole(double.Parse(inputCoordsHole[0], CultureInfo.InvariantCulture), double.Parse(inputCoordsHole[1], CultureInfo.InvariantCulture));
+                    holes.Add(hole);             
                 }
-
-                Scenario scenario = new Scenario();
 
                 for (int ii = 5; ii <= 20; ii = ii + ii)
                 {
+                    
                     Duration duration = new Duration(ii);
+                    duration.Robots = new List<Robot>();
+                    duration.Holes = new List<Hole>();
 
-                    duration.Robots = robots;
-                    duration.Holes = holes;
+                    foreach (var robot in robots)
+                    {
+                        duration.Robots.Add(robot);
+                    }
+                    foreach (var hole in holes)
+                    {
+                        duration.Holes.Add(hole);
+                    }                
 
                     scenario.Durations.Add(duration);
+
                 }
-
                 _scenarios.Add(scenario);
-
             }
 
         }
+
     }
 
-    internal class Robot
+    class Robot
     {
-        public int Id { get; set; }
-        public double PosX { get; set; }
-        public double PosY { get; set; }
+        public int Id { get; private set; }
+        public double PosX { get; private set; }
+        public double PosY { get; private set; }
         public bool isHiding { get; set; }
 
         public Robot(double posX, double posY, int id)
@@ -170,36 +184,33 @@ namespace EscapePlan
         }
     }
 
-    internal class Hole
+    class Hole
     {
-        public Dictionary<int, double> RobotsInRange { get; set; }
-        public int Id { get; set; }
-        public double PosX { get; set; }
-        public double PosY { get; set; }
+        public Dictionary<int, double> Candidates { get; set; }        
+        public double PosX { get; private set; }
+        public double PosY { get; private set; }
         public bool isOccupied { get; set; }
-        public Hole(double posX, double posY, int id)
+        public Hole(double posX, double posY)
         {
             PosX = posX;
             PosY = posY;
-            Id = id;
-           
         }
     }
 
-    internal class Scenario
+    class Scenario
     {
-        public int Id { get; set; }
+        public int Id { get; private set; }
         public List<Duration> Durations { get; set; }
 
-        public Scenario()
+        public Scenario(int id)
         {
-            Durations = new List<Duration>();
+            Id = id;
         }
     }
 
-    internal class Duration
+    class Duration
     {
-        public int Time { get; set; }
+        public int Time { get; private set; }
         public int Survivors { get; set; }
         public List<Robot> Robots { get; set; }
         public List<Hole> Holes { get; set; }
@@ -210,4 +221,6 @@ namespace EscapePlan
         }
 
     }
+
+
 }
