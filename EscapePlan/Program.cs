@@ -41,7 +41,7 @@ namespace EscapePlan
 
                 foreach (var duration in scenario.Durations)
                 {
-                    List<Robot> survivors = duration.Robots.FindAll(r => r.isHiding == true);
+                    List<Robot> survivors = duration.Robots.FindAll(r => r.IsHiding == true);
 
                     Console.WriteLine($"In {duration.Time} seconds {survivors.Count} robot(s) can escape");
                 }
@@ -54,26 +54,33 @@ namespace EscapePlan
         {
             foreach (var scenario in _scenarios)
             {
-
                 foreach (var duration in scenario.Durations)
                 {
                     foreach (var hole in duration.Holes)
                     {
-                        int RobotId = hole.Candidates.OrderBy(a => a.Value).FirstOrDefault().Key;
+                        var robotsInOrder = hole.Candidates.OrderBy(a => a.Value);
 
-                        Robot robot = _scenarios
-                            .Find(a => a.Id == scenario.Id)
-                            .Durations.Where(b => b.Time == duration.Time)
-                            .Select(b => b.Robots
-                            .Find(c => c.Id == RobotId))
-                            .SingleOrDefault();
+                        foreach (var pair in robotsInOrder)
+                        {
+                            Robot robot = _scenarios
+                              .Find(a => a.Id == scenario.Id)
+                              .Durations.Where(b => b.Time == duration.Time)
+                              .Select(b => b.Robots
+                              .Find(c => c.Id == pair.Key))
+                              .SingleOrDefault();
 
-                        robot.isHiding = true;
-
+                            if (!robot.IsHiding)
+                            {
+                                if (!hole.IsOccupied)
+                                {
+                                    hole.IsOccupied = true;
+                                    robot.IsHiding = true;
+                                }
+                            }
+                        }
                     }
                 }
             }
-
         }
 
         void UnleashStorm()
@@ -86,7 +93,7 @@ namespace EscapePlan
 
                     foreach (var hole in duration.Holes)
                     {
-                        Dictionary<int,double> robotsInRange = new Dictionary<int, double>();
+                        Dictionary<int, double> robotsInRange = new Dictionary<int, double>();
 
                         foreach (var robot in duration.Robots)
                         {
@@ -98,16 +105,13 @@ namespace EscapePlan
                             if (distanceToHole <= movementCapacity)
                             {
                                 robotsInRange.Add(robot.Id, distanceToHole);
+                                hole.IsOccupied = true;
                             }
 
-                            distanceToX = 0;
-                            distanceToY = 0;
-                            distanceToHole = 0;
                         }
 
                         hole.Candidates = new Dictionary<int, double>(robotsInRange);
                     }
-                    movementCapacity = 0;
                 }
             }
         }
@@ -117,7 +121,7 @@ namespace EscapePlan
             for (int i = 0; i < 10; i++)
             {
                 Scenario scenario = new Scenario(i + 1);
-                scenario.Durations = new List<Duration>();
+                List<Duration> durations = new List<Duration>();
 
                 List<Robot> robots = new List<Robot>();
                 List<Hole> holes = new List<Hole>();
@@ -128,38 +132,36 @@ namespace EscapePlan
                     break;
                 }
 
-                for (int iii = 0; iii < newRobots; iii++)
+                for (int ii = 0; ii < newRobots; ii++)
                 {
+
+
                     string[] inputCoordsRobot = Console.ReadLine().Split(' ');
-                    Robot robot = new Robot(double.Parse(inputCoordsRobot[0], CultureInfo.InvariantCulture), double.Parse(inputCoordsRobot[1], CultureInfo.InvariantCulture), iii + 1);
+                    Robot robot = new Robot(double.Parse(inputCoordsRobot[0], CultureInfo.InvariantCulture), double.Parse(inputCoordsRobot[1], CultureInfo.InvariantCulture), ii + 1);
                     robots.Add(robot);
+
+
                 }
 
                 int newHoles = int.Parse(Console.ReadLine());
-                for (int iii = 0; iii < newHoles; iii++)
+                for (int ii = 0; ii < newHoles; ii++)
                 {
                     string[] inputCoordsHole = Console.ReadLine().Split(' ');
                     Hole hole = new Hole(double.Parse(inputCoordsHole[0], CultureInfo.InvariantCulture), double.Parse(inputCoordsHole[1], CultureInfo.InvariantCulture));
-                    holes.Add(hole);             
+                    holes.Add(hole);
                 }
 
                 for (int ii = 5; ii <= 20; ii = ii + ii)
                 {
-                    
+
                     Duration duration = new Duration(ii);
-                    duration.Robots = new List<Robot>();
-                    duration.Holes = new List<Hole>();
 
-                    foreach (var robot in robots)
-                    {
-                        duration.Robots.Add(robot);
-                    }
-                    foreach (var hole in holes)
-                    {
-                        duration.Holes.Add(hole);
-                    }                
+                    duration.Robots = new List<Robot>(robots.Select(r => r.Clone() as Robot));
+                    duration.Holes = new List<Hole>(holes.Select(h => h.Clone() as Hole));
 
-                    scenario.Durations.Add(duration);
+                    durations.Add(duration);
+
+                    scenario.Durations = new List<Duration>(durations.Select(d => d.Clone() as Duration));
 
                 }
                 _scenarios.Add(scenario);
@@ -169,12 +171,12 @@ namespace EscapePlan
 
     }
 
-    class Robot
+    class Robot : ICloneable
     {
         public int Id { get; private set; }
         public double PosX { get; private set; }
         public double PosY { get; private set; }
-        public bool isHiding { get; set; }
+        public bool IsHiding { get; set; }
 
         public Robot(double posX, double posY, int id)
         {
@@ -182,18 +184,40 @@ namespace EscapePlan
             PosY = PosY;
             Id = id;
         }
+
+        public object Clone()
+        {
+            var robot = new Robot(this.PosX, this.PosY, this.Id)
+            {
+                IsHiding = this.IsHiding
+            };
+            return robot;
+        }
     }
 
-    class Hole
+    class Hole : ICloneable
     {
-        public Dictionary<int, double> Candidates { get; set; }        
+        public Dictionary<int, double> Candidates { get; set; }
         public double PosX { get; private set; }
         public double PosY { get; private set; }
-        public bool isOccupied { get; set; }
+        public bool IsOccupied { get; set; }
         public Hole(double posX, double posY)
         {
             PosX = posX;
             PosY = posY;
+        }
+
+        public object Clone()
+        {
+            var hole = new Hole(this.PosX, this.PosY)
+            {
+                IsOccupied = this.IsOccupied,
+                Candidates = this.Candidates
+
+            };
+
+            return hole;
+
         }
     }
 
@@ -208,7 +232,7 @@ namespace EscapePlan
         }
     }
 
-    class Duration
+    class Duration : ICloneable
     {
         public int Time { get; private set; }
         public int Survivors { get; set; }
@@ -220,6 +244,16 @@ namespace EscapePlan
             Time = time;
         }
 
+        public object Clone()
+        {
+            var duration = new Duration(this.Time)
+            {
+                Survivors = this.Survivors,
+                Robots = this.Robots,
+                Holes = this.Holes
+            };
+            return duration;
+        }
     }
 
 
