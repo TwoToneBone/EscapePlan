@@ -105,9 +105,7 @@ namespace EscapePlan
                             if (distanceToHole <= movementCapacity)
                             {
                                 robotsInRange.Add(robot.Id, distanceToHole);
-                                hole.IsOccupied = true;
                             }
-
                         }
 
                         hole.Candidates = new Dictionary<int, double>(robotsInRange);
